@@ -1,0 +1,153 @@
+import numpy as np
+import os
+import pickle
+import matplotlib.pyplot as plt
+
+
+def loadData(path):
+    listOfFiles = os.listdir(path='cifar-10-batches-py/')
+    train = []
+    train_labels = []
+        
+        
+    print("Training files = ",listOfFiles[1:6])
+    #For collecting Training data:
+    for file in listOfFiles[1:6]:
+        with open(path+file,'rb') as fo:
+            dict = pickle.load(fo,encoding='bytes')
+            train.append(dict[b'data'])
+            train_labels.append(dict[b'labels'])
+
+    dictData = {}
+    dictData['train_data'] = np.reshape(np.array(train),newshape=(np.array(train).shape[0]*np.array(train).shape[1],np.array(train).shape[2]))
+    dictData['train_labels'] = np.reshape(np.array(train_labels),newshape=(np.array(train_labels).shape[0]*np.array(train_labels).shape[1]))
+    return dictData
+
+
+#load dataset
+dataset = loadData(path='cifar-10-batches-py/')
+
+
+dataset['train_data'].shape[0]
+
+
+#visualizing train sample
+temp = dataset['train_data'][49000]
+label = dataset['train_labels'][49000]
+
+#representing RGB values
+R = temp[0:1024].reshape(32,32)
+G = np.reshape(temp[1024:2048],newshape=(32,32))
+B = np.reshape(temp[2048:],newshape=(32,32))
+temp = np.dstack((R,G,B))  
+plt.imshow(temp)
+plt.xticks([])
+plt.yticks([])
+plt.xlabel(label)
+plt.show()
+
+
+X_train, y_train= dataset['train_data'],dataset['train_labels']
+
+#classifier:
+class kNearestNeighbour(object):
+    def __init__(self):
+        pass
+    
+    def train(self,X,Y):
+        #Knn will remember all of its training data
+        self.Xtr = X
+        self.Ytr = Y
+        
+    def predict(self,X,k):
+       
+        test_samples = X.shape[0]
+        
+        Ypred = np.zeros(test_samples,dtype=self.Ytr.dtype)
+        
+        #Calculating the l1 distance 
+        for i in range(test_samples):
+            print("Test example = ",i,end="\n")
+            
+            
+            label_count = np.zeros(10,dtype=self.Ytr.dtype)    
+            dist = np.sum(np.abs(X[i,:] - self.Xtr),axis=1)  horizontally across columns
+            
+           
+            idx = np.argpartition(dist,k)
+            min_ind = idx[:k]
+            
+            #iterates over min_ind 
+            #Max value at any index returned using np.argmax()
+            for x in min_ind:
+                label_count[int(self.Ytr[x])] +=1
+            Ypred[i] = np.argmax(label_count)
+    
+    
+        return Ypred
+
+
+
+num_folds = 5
+num_training = 50000
+
+k_choices = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+
+if num_training/num_folds % num_folds != 0.0:
+    raise ValueError('Number of training examples not evenly divisible by number of folds.')
+
+# Split training set
+X_train_folds = np.split(X_train, num_folds)
+y_train_folds = np.split(y_train, num_folds)
+
+
+# accuracy values that we found when using that value of k.
+k_to_accuracies = {}
+
+# Perform k-fold cross validation to find the best value of k
+for k in range(1,20):
+    k_to_accuracies[k] = []
+    
+for idx in range(num_folds):
+    # Use bin with index idx as validation set
+    X_train_set = np.concatenate((*X_train_folds[:idx], *X_train_folds[idx+1:]), axis=0)
+    y_train_set = np.concatenate((*y_train_folds[:idx], *y_train_folds[idx+1:]), axis=0)
+    X_validation_set = X_train_folds[idx]
+    y_validation_set = y_train_folds[idx]   
+    num_validation_set = X_validation_set.shape[0]
+
+    # Train kNN
+    knn = kNearestNeighbour()
+    knn.train(X_train_set, y_train_set)
+ 
+    
+    for k in k_choices:
+        # Predict labels for validation set
+        y_validation_pred = knn.predict(X_validation_set,k)
+        # Check accuracy
+        accuracy = (float(np.sum(np.equal(y_validation_pred, y_validation_set)))/num_validation_set)
+        k_to_accuracies[k].append(accuracy)
+
+# Print the accuracies
+for k in sorted(k_to_accuracies):
+    for accuracy in k_to_accuracies[k]:
+        print('k = %d, accuracy = %f' % (k, accuracy))
+
+
+
+
+
+# plot observations
+for k in range(1,20):
+    accuracies = k_to_accuracies[k]
+    print('k = %d, average accuracy = %f' % (k, np.average(accuracies)))
+    plt.scatter([k] * len(accuracies), accuracies)
+
+# plot trend line with error bars
+accuracies_mean = np.array([np.mean(v) for k,v in sorted(k_to_accuracies.items())])
+accuracies_std = np.array([np.std(v) for k,v in sorted(k_to_accuracies.items())])
+plt.errorbar(range(1,20), accuracies_mean, yerr=accuracies_std)
+plt.title('Cross-validation on k')
+plt.xlabel('k')
+plt.ylabel('Cross-validation accuracy')
+plt.show()
